@@ -22,7 +22,7 @@ PROJECT(Stellarium)
 # Use integer versions instead of strings for easier handling if required
 SET(STELLARIUM_MAJOR 0)
 SET(STELLARIUM_MINOR 21)
-SET(STELLARIUM_PATCH 0)
+SET(STELLARIUM_PATCH 2)
 ADD_DEFINITIONS(
      -DSTELLARIUM_MAJOR=${STELLARIUM_MAJOR}
      -DSTELLARIUM_MINOR=${STELLARIUM_MINOR}
@@ -36,13 +36,17 @@ SET(COPYRIGHT_YEARS "2000-${CURRENTYEAR}")
 SET(STELLARIUM_URL "https://stellarium.org/")
 ADD_DEFINITIONS(-DSTELLARIUM_URL="${STELLARIUM_URL}")
 
+# Define URL for usage within program (feedback URL for plug-ins)
+SET(STELLARIUM_DEV_URL "https://github.com/Stellarium/stellarium")
+ADD_DEFINITIONS(-DSTELLARIUM_DEV_URL="${STELLARIUM_DEV_URL}")
+
 SET(PACKAGE_VERSION "${VERSION}")
 ADD_DEFINITIONS(-DPACKAGE_VERSION="${PACKAGE_VERSION}")
 ADD_DEFINITIONS(-DCOPYRIGHT_YEARS="${COPYRIGHT_YEARS}")
 ADD_DEFINITIONS(-DSTELLARIUM_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
-# currently Qt 5.9/5.12 is recommended
-SET(MINIMAL_QT_VERSION "5.7.0")
+# currently Qt 5.12 is recommended
+SET(MINIMAL_QT_VERSION "5.9.0")
 # TODO: Check real minimal supported version of GPSD API
 SET(MINIMAL_GPS_API_VERSION "6.0")
 
@@ -203,8 +207,8 @@ ADD_DEFINITIONS(-D_USE_MATH_DEFINES)
 
 # flags shared for gcc-like compilers (also MinGW/Clang)
 # Qt 5.7 requires C++11 support
-SET(STEL_GCC_C_FLAGS "-Wall -Wextra -Wno-unused-parameter")
-SET(STEL_GCC_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter")
+SET(STEL_GCC_C_FLAGS "-Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas")
+SET(STEL_GCC_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas")
 # Intel C/C++ compilers do not have an option -Wno-unused-results
 IF(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Intel")
      SET(STEL_GCC_C_FLAGS "${STEL_GCC_C_FLAGS} -Wno-unused-result")
@@ -415,8 +419,12 @@ IF(EXISTS "${PROJECT_SOURCE_DIR}/guide/guide.pdf")
      MESSAGE(STATUS "Found Stellarium User Guide")
      INSTALL(FILES guide/guide.pdf DESTINATION ${SDATALOC}/guide)
      SET(ISS_GUIDE "Name: \"{group}\\{cm:UserGuide}\"; Filename: \"{app}\\guide\\guide.pdf\"")
+     SET(ISS_GUIDE_CD "Name: \"{commondesktop}\\{cm:UserGuide}\"; Filename: \"{app}\\guide\\guide.pdf\"; Tasks: desktopicon\\common")
+     SET(ISS_GUIDE_UD "Name: \"{userdesktop}\\{cm:UserGuide}\"; Filename: \"{app}\\guide\\guide.pdf\"; Tasks: desktopicon\\user")
 ELSE()
      SET(ISS_GUIDE "; No link to Stellarium User Guide")
+     SET(ISS_GUIDE_CD "; No link to Stellarium User Guide")
+     SET(ISS_GUIDE_UD "; No link to Stellarium User Guide")
 ENDIF()
 
 ########### Plugin setup #############
@@ -443,6 +451,7 @@ ADD_PLUGIN(Novae 1)
 ADD_PLUGIN(Observability 1)
 ADD_PLUGIN(Oculars 1)
 ADD_PLUGIN(Oculus 0)
+ADD_PLUGIN(OnlineQueries 1)
 ADD_PLUGIN(PointerCoordinates 1)
 ADD_PLUGIN(Pulsars 1)
 ADD_PLUGIN(Quasars 1)

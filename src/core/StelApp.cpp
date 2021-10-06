@@ -196,6 +196,10 @@ Q_IMPORT_PLUGIN(RemoteSyncStelPluginInterface)
 Q_IMPORT_PLUGIN(VtsStelPluginInterface)
 #endif
 
+#ifdef USE_STATIC_PLUGIN_ONLINEQUERIES
+Q_IMPORT_PLUGIN(OnlineQueriesPluginInterface)
+#endif
+
 // Initialize static variables
 StelApp* StelApp::singleton = Q_NULLPTR;
 qint64 StelApp::startMSecs = 0;
@@ -421,6 +425,11 @@ void StelApp::init(QSettings* conf)
 	core = new StelCore();
 	if (!fuzzyEquals(saveProjW, -1.) && !fuzzyEquals(saveProjH, -1.))
 		core->windowHasBeenResized(0, 0, saveProjW, saveProjH);
+	
+	//Initializing locale at the begining to show all strings translated
+	localeMgr = new StelLocaleMgr();
+	localeMgr->init();
+	//SplashScreen::showMessage(q_("Initializing locales..."));
 
 	SplashScreen::showMessage(q_("Initializing textures..."));
 	// Initialize AFTER creation of openGL context
@@ -428,9 +437,7 @@ void StelApp::init(QSettings* conf)
 
 	SplashScreen::showMessage(q_("Initializing network access..."));
 	networkAccessManager = new QNetworkAccessManager(this);
-	#if QT_VERSION >= 0x050900
 	networkAccessManager->setRedirectPolicy(QNetworkRequest::NoLessSafeRedirectPolicy);
-	#endif
 	SplashScreen::showMessage(q_("Initializing network disk cache..."));
 	// Activate http cache if Qt version >= 4.5
 	QNetworkDiskCache* cache = new QNetworkDiskCache(networkAccessManager);
@@ -450,7 +457,6 @@ void StelApp::init(QSettings* conf)
 
 	//create non-StelModule managers
 	propMgr = new StelPropertyMgr();
-	localeMgr = new StelLocaleMgr();
 	skyCultureMgr = new StelSkyCultureMgr();
 	propMgr->registerObject(skyCultureMgr);
 	planetLocationMgr = new StelLocationMgr();
@@ -465,9 +471,6 @@ void StelApp::init(QSettings* conf)
 	stelObjectMgr = new StelObjectMgr();
 	stelObjectMgr->init();
 	getModuleMgr().registerModule(stelObjectMgr);	
-
-	SplashScreen::showMessage(q_("Initializing locales..."));
-	localeMgr->init();
 
 	// Hips surveys
 	SplashScreen::showMessage(q_("Initializing HiPS survey..."));
@@ -1106,12 +1109,8 @@ QString StelApp::getViewportEffect() const
 void StelApp::dumpModuleActionPriorities(StelModule::StelModuleActionName actionName) const
 {
 	const QList<StelModule*> modules = moduleMgr->getCallOrders(actionName);
-	#if QT_VERSION >= 0x050500
 	QMetaEnum me = QMetaEnum::fromType<StelModule::StelModuleActionName>();
 	qDebug() << "Module Priorities for action named" << me.valueToKey(actionName);
-	#else
-	qDebug() << "Module Priorities for action named" << actionName;
-	#endif
 
 	for (auto* module : modules)
 	{
