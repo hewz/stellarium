@@ -5,7 +5,7 @@ on:
     tags:
       - v*
     branches:
-      - CICD
+      - CICD*
   workflow_dispatch:
 
 jobs:
