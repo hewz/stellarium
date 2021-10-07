@@ -194,7 +194,7 @@ public:
 
 	virtual ~NightModeGraphicsEffect() Q_DECL_OVERRIDE
 	{
-		// NOTE: Why Q_ASSERT is here and why destructor is not marked as 'override'?
+		// NOTE: Why Q_ASSERT is here?
 		//Q_ASSERT(parent->glContext() == QOpenGLContext::currentContext());
 		//clean up fbo
 		delete fbo;
@@ -211,7 +211,7 @@ protected:
 		gl->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &mainFBO);
 
 		double pixelRatio = paintDevice->devicePixelRatioF();
-		QSize size(paintDevice->width() * pixelRatio, paintDevice->height() * pixelRatio);
+		QSize size(static_cast<int>(paintDevice->width() * pixelRatio), static_cast<int>(paintDevice->height() * pixelRatio));
 		if (fbo && fbo->size() != size)
 		{
 			delete fbo;
@@ -582,6 +582,8 @@ StelMainView::StelMainView(QSettings* settings)
 	Q_ASSERT(!singleton);
 	singleton = this;
 
+	qApp->installEventFilter(this);
+
 	setWindowIcon(QIcon(":/mainWindow/icon.bmp"));
 	initTitleI18n();
 	setObjectName("MainView");
@@ -669,12 +671,30 @@ void StelMainView::resizeEvent(QResizeEvent* event)
 	QGraphicsView::resizeEvent(event);
 }
 
+bool StelMainView::eventFilter(QObject *obj, QEvent *event)
+{
+	if(event->type() == QEvent::FileOpen)
+	{
+		QFileOpenEvent *openEvent = static_cast<QFileOpenEvent *>(event);
+		//qDebug() << "load script:" << openEvent->file();
+		qApp->setProperty("onetime_startup_script", openEvent->file());
+	}
+	return QGraphicsView::eventFilter(obj, event);
+}
+
 void StelMainView::mouseMoveEvent(QMouseEvent *event)
 {
-	// Show the cursor and reset the timeout if it is active.
-	if (QGuiApplication::overrideCursor())
-		QGuiApplication::restoreOverrideCursor();
-	if (flagCursorTimeout) cursorTimeoutTimer->start();
+	if (flagCursorTimeout) 
+	{
+		// Show the previous cursor and reset the timeout if the current is "hidden"
+		if (QGuiApplication::overrideCursor() && (QGuiApplication::overrideCursor()->shape() == Qt::BlankCursor) )
+		{
+			QGuiApplication::restoreOverrideCursor();
+		}
+
+		cursorTimeoutTimer->start();
+	}
+	
 	QGraphicsView::mouseMoveEvent(event);
 }
 
@@ -1258,7 +1278,10 @@ void StelMainView::dumpOpenGLdiagnostics() const
 		qDebug() << " - Non power of two textures" << (oglFeatures&QOpenGLFunctions::NPOTTextures ? "are" : "are NOT") << "available.";
 		qDebug() << " - Non power of two textures" << (oglFeatures&QOpenGLFunctions::NPOTTextureRepeat ? "can" : "CANNOT") << "use GL_REPEAT as wrap parameter.";
 		qDebug() << " - The fixed function pipeline" << (oglFeatures&QOpenGLFunctions::FixedFunctionPipeline ? "is" : "is NOT") << "available.";
-		
+		GLfloat lineWidthRange[2];
+		context->functions()->glGetFloatv(GL_ALIASED_LINE_WIDTH_RANGE, lineWidthRange);
+		qDebug() << "Line widths available from" << lineWidthRange[0] << "to" << lineWidthRange[1];
+
 		qDebug() << "OpenGL shader capabilities and details:";
 		qDebug() << " - Vertex Shader:" << (QOpenGLShader::hasOpenGLShaders(QOpenGLShader::Vertex, context) ? "YES" : "NO");
 		qDebug() << " - Fragment Shader:" << (QOpenGLShader::hasOpenGLShaders(QOpenGLShader::Fragment, context) ? "YES" : "NO");
@@ -1359,16 +1382,34 @@ void StelMainView::drawEnded()
 void StelMainView::setFlagCursorTimeout(bool b)
 {
 	if (b == flagCursorTimeout) return;
+
 	flagCursorTimeout = b;
-	if (b)
+	if (b) 	// enable timer
+	{
 		cursorTimeoutTimer->start();
-	else
+	}
+	else	// disable timer
+	{
+		// Show the previous cursor if the current is "hidden" 
+		if (QGuiApplication::overrideCursor() && (QGuiApplication::overrideCursor()->shape() == Qt::BlankCursor) )
+		{
+			// pop the blank cursor
+			QGuiApplication::restoreOverrideCursor();
+		}
+		// and stop the timer 
 		cursorTimeoutTimer->stop();
+	}
+	
 	emit flagCursorTimeoutChanged(b);
 }
 
 void StelMainView::hideCursor()
 {
+	// timout fired...
+	// if the feature is not asked, do nothing
+	if (!flagCursorTimeout) return;
+
+	// "hide" the current cursor by pushing a Blank cursor
 	QGuiApplication::setOverrideCursor(Qt::BlankCursor);
 }
 
@@ -1478,9 +1519,9 @@ void StelMainView::doScreenshot(void)
 	// HiDPI screens interfere, and the viewing angle has to be maintained.
 	// First, image size:
 	glWidget->makeCurrent();
-	float pixelRatio = QOpenGLContext::currentContext()->screen()->devicePixelRatio();
-	int imgWidth =stelScene->width();
-	int imgHeight=stelScene->height();
+	float pixelRatio = static_cast<float>(QOpenGLContext::currentContext()->screen()->devicePixelRatio());
+	int imgWidth =static_cast<int>(stelScene->width());
+	int imgHeight=static_cast<int>(stelScene->height());
 	bool effectWasEnabled=rootItem->graphicsEffect()->isEnabled();
 	rootItem->graphicsEffect()->setEnabled(false);
 	if (flagUseCustomScreenshotSize)
@@ -1502,7 +1543,11 @@ void StelMainView::doScreenshot(void)
 #ifdef GL_RENDERBUFFER_FREE_MEMORY_ATI
 			GLint freeGLmemoryAMD[4];
 			context->functions()->glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, freeGLmemoryAMD);
-			qCDebug(mainview)<<"Free GPU memory (AMD version):" << (uint)freeGLmemoryAMD[1]/1024 << "+" << (uint)freeGLmemoryAMD[3]/1024 << " of " << (uint)freeGLmemoryAMD[0]/1024 << "+" << (uint)freeGLmemoryAMD[2]/1024 << "kB -- we ask for " << customScreenshotWidth*customScreenshotHeight*8 / 1024 <<"kB";
+			qCDebug(mainview)<<"Free GPU memory (AMD version):" << static_cast<uint>(freeGLmemoryAMD[1])/1024 << "+"
+					  << static_cast<uint>(freeGLmemoryAMD[3])/1024 << " of "
+					  << static_cast<uint>(freeGLmemoryAMD[0])/1024 << "+"
+					  << static_cast<uint>(freeGLmemoryAMD[2])/1024 << "kB -- we ask for "
+					  << customScreenshotWidth*customScreenshotHeight*8 / 1024 <<"kB";
 #endif
 #endif
 			GLint texSize,viewportSize[2],rbSize;
@@ -1532,10 +1577,10 @@ void StelMainView::doScreenshot(void)
 	fbFormat.setInternalTextureFormat(isGLES ? GL_RGBA : GL_RGB); // try to avoid transparent background!
 	if(const auto multisamplingLevel = configuration->value("video/multisampling", 0).toInt())
         fbFormat.setSamples(multisamplingLevel);
-	QOpenGLFramebufferObject * fbObj = new QOpenGLFramebufferObject(imgWidth * pixelRatio, imgHeight * pixelRatio, fbFormat);
+	QOpenGLFramebufferObject * fbObj = new QOpenGLFramebufferObject(static_cast<int>(imgWidth * pixelRatio), static_cast<int>(imgHeight * pixelRatio), fbFormat);
 	fbObj->bind();
 	// Now the painter has to be convinced to paint to the potentially larger image frame.
-	QOpenGLPaintDevice fbObjPaintDev(imgWidth * pixelRatio, imgHeight * pixelRatio);
+	QOpenGLPaintDevice fbObjPaintDev(static_cast<int>(imgWidth * pixelRatio), static_cast<int>(imgHeight * pixelRatio));
 
 	// It seems the projector has its own knowledge about image size. We must adjust fov and image size, but reset afterwards.
 	StelProjector::StelProjectorParams pParams=StelApp::getInstance().getCore()->getCurrentStelProjectorParams();

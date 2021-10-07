@@ -122,8 +122,12 @@ void ScriptConsole::createDialogContent()
 	// get decent indentation
 	QFont font = ui->scriptEdit->font();
 	QFontMetrics fontMetrics = QFontMetrics(font);
-	int width = fontMetrics.width("0");
+	int width = fontMetrics.boundingRect("0").width();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+	ui->scriptEdit->setTabStopDistance(4*width); // 4 characters
+#else
 	ui->scriptEdit->setTabStopWidth(4*width); // 4 characters
+#endif
 	ui->scriptEdit->setFocus();
 
 	QSettings* conf = StelApp::getInstance().getSettings();
@@ -271,7 +275,7 @@ void ScriptConsole::preprocessScript()
 		StelApp::getInstance().getScriptMgr().preprocessScript( scriptFileName, src, dest, ui->includeEdit->text(), errLoc );
 	}
 	else
-		qWarning() << "[ScriptConsole] WARNING - unknown preprocessor type";
+		qDebug() << "[ScriptConsole] WARNING - unknown preprocessor type";
 
 	ui->scriptEdit->setPlainText(dest);
 	scriptFileName = ""; // OK, it's a new file!
@@ -320,7 +324,6 @@ void ScriptConsole::scriptStarted()
 void ScriptConsole::scriptEnded()
 {
 	qDebug() << "ScriptConsole::scriptEnded";
-	QString html = ui->logBrowser->toHtml();
 	appendLogLine(QString("Script finished at %1").arg(QDateTime::currentDateTime().toString()));
 	ui->quickrunCombo->setEnabled(true);
 	ui->runButton->setEnabled(true);
